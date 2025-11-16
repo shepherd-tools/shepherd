@@ -7,7 +7,7 @@ export default async (context: IMigrationContext, options: any) => {
   await forEachRepo(context, async (repo) => {
     const spinner = logger.spinner('Pushing changes');
     try {
-      await adapter.pushRepo(repo, options.force);
+      await adapter.pushRepo(repo, options.force, options.noVerify);
       spinner.succeed('Changes pushed');
     } catch (e: any) {
       logger.error(e);

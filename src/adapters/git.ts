@@ -55,12 +55,13 @@ abstract class GitAdapter implements IRepoAdapter {
     }
   }
 
-  public async commitRepo(repo: IRepo): Promise<void> {
+  public async commitRepo(repo: IRepo, noVerify:boolean): Promise<void> {
     const {
       migration: { spec },
     } = this.migrationContext;
+    const options = noVerify ? ['--no-verify'] : undefined;
     await this.git(repo).add('.');
-    await this.git(repo).commit(`${spec.title} [shepherd]`);
+    await this.git(repo).commit(`${spec.title} [shepherd]`, options);
   }
 
   public async resetChangedFiles(repo: IRepo): Promise<void> {
@@ -68,9 +69,10 @@ abstract class GitAdapter implements IRepoAdapter {
     await this.git(repo).clean('f', ['-d']);
   }
 
-  public async pushRepo(repo: IRepo, force: boolean): Promise<void> {
-    const options = force ? ['--force'] : undefined;
-
+  public async pushRepo(repo: IRepo, force: boolean, noVerify: boolean): Promise<void> {
+    const options = []
+    if (force) { options.push('--force') }
+    if (noVerify) { options.push('--no-verify') }
     await this.git(repo).push('origin', 'HEAD', options);
   }
 

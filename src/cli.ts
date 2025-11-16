@@ -134,11 +134,16 @@ applyCommand.option(
 );
 applyCommand.action(handleCommand(apply));
 
-addCommand('commit', 'Commit all changes for the specified migration', true, commit);
+const commitCommand = buildCommand('commit', 'Commit all changes for the specified migration');
+addReposOption(commitCommand)
+commitCommand.option('-n, --no-verify', 'Skips pre-commit hooks');
+commitCommand.action(handleCommand(commit));
+
 addCommand('reset', 'Reset all changes for the specified migration', true, reset);
 
 const pushCommand = buildCommand('push', 'Push all changes for the specified migration');
 addReposOption(pushCommand);
+pushCommand.option('-n, --no-verify', 'Skips pre-push hooks');
 pushCommand.option('-f, --force', 'Force push, skipping any safety checks');
 pushCommand.action(handleCommand(push));
 

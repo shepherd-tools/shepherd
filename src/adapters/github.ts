@@ -105,7 +105,7 @@ class GithubAdapter extends GitAdapter {
     await this.git(repo).reset(['--hard', `origin/${defaultBranch}`]);
   }
 
-  public async pushRepo(repo: IRepo, force: boolean): Promise<void> {
+  public async pushRepo(repo: IRepo, force: boolean, noVerify: boolean): Promise<void> {
     let shouldForce = false;
 
     // First, get any changes from the remote
@@ -126,7 +126,7 @@ class GithubAdapter extends GitAdapter {
       shouldForce = true;
     }
 
-    await super.pushRepo(repo, force || shouldForce);
+    await super.pushRepo(repo, force || shouldForce, noVerify);
   }
 
   public async createPullRequest(
