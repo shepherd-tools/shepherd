@@ -4,12 +4,6 @@ import path from 'path';
 import { IRepo } from '../adapters/base.js';
 import { IMigrationContext } from '../migration-context.js';
 import { getLLMProvider, readFilesForContext } from '../services/llm.js';
-import {
-  validateDiff,
-  applyDiff,
-  extractFilePaths,
-  parseDiffStats,
-} from '../util/git-diff.js';
 import forEachRepo from '../util/for-each-repo.js';
 
 interface ApplyWithLLMOptions {
@@ -86,6 +80,8 @@ async function processRepoWithLLM(
     const fileContents = await readFilesForContext(repoDir, filesToModify);
     repoLogs.push(`Loaded ${fileContents.length} files for LLM processing`);
 
+
+    console.log('Files sent to LLM:', fileContents);
     // Normalize content → raw text (CRITICAL)
     const normalizedFiles = fileContents.map((f: any) => {
       if (Array.isArray(f.content?.lines)) {
@@ -98,9 +94,14 @@ async function processRepoWithLLM(
     });
 
     // Call LLM
-    repoLogs.push('Calling LLM for code modifications...');
+    repoLogs.push('Calling OPENAI LLM for code modifications...');
     const llmProvider = getLLMProvider();
     let llmResponse = await llmProvider.callLLM(actualPrompt, normalizedFiles);
+
+    // Save LLM response to shepherd directory
+    const shepherdResponsePath = path.join(process.cwd(), 'llm_response.json');
+    await fs.writeFile(shepherdResponsePath, JSON.stringify(llmResponse, null, 2), 'utf-8');
+    repoLogs.push(`LLM response saved to ${shepherdResponsePath}`);
 
     if (process.env.DEBUG_LLM === 'true') {
       console.log('\n=== LLM RESPONSE ===');
@@ -111,62 +112,32 @@ async function processRepoWithLLM(
 
     // Retry once if empty
     if (!llmResponse?.diffs || llmResponse.diffs.trim().length === 0) {
-      repoLogs.push(chalk.yellow('Empty LLM response, retrying with strict diff enforcement'));
-      llmResponse = await llmProvider.callLLM(
-        `${actualPrompt}\n\nRespond ONLY with a valid unified git diff.`,
-        normalizedFiles
-      );
+      repoLogs.push(chalk.yellow('Empty LLM response, retrying'));
+      llmResponse = await llmProvider.callLLM(actualPrompt, normalizedFiles);
     }
 
     if (!llmResponse?.diffs || llmResponse.diffs.trim().length === 0) {
-      repoLogs.push(chalk.yellow('LLM did not generate any diffs'));
+      repoLogs.push(chalk.yellow('LLM did not generate any response'));
       return false;
     }
 
-    // Require strict unified diff
-    const diffText = llmResponse.diffs.trim();
-    const isUnifiedDiff = diffText.startsWith('diff --git');
-
-    if (!isUnifiedDiff) {
-      repoLogs.push(chalk.red('LLM response is not a valid unified git diff'));
-      await resetRepoOnFailure(context, repo, repoLogs);
-      return false;
-    }
-
-    // Validate diff
-    repoLogs.push('Validating diffs from LLM response...');
-    const validationResult = await validateDiff(repoDir, diffText);
-
-    if (!validationResult.valid) {
-      repoLogs.push(chalk.red('Diff validation failed:'));
-      validationResult.errors.forEach((e) => repoLogs.push(chalk.red(`  - ${e}`)));
-      await resetRepoOnFailure(context, repo, repoLogs);
-      return false;
-    }
-
-    if (validationResult.warnings.length > 0) {
-      repoLogs.push(chalk.yellow('Diff validation warnings:'));
-      validationResult.warnings.forEach((w) => repoLogs.push(chalk.yellow(`  - ${w}`)));
-    }
-
-    const stats = parseDiffStats(diffText);
-    repoLogs.push(
-      chalk.blue(`Diff statistics: +${stats.additions}, -${stats.deletions}`)
-    );
-
-    const affectedFiles = extractFilePaths(diffText);
-    repoLogs.push(`Affected files: ${affectedFiles.join(', ')}`);
-
-    if (options.dryRun) {
-      repoLogs.push(chalk.cyan('[DRY RUN] Diff validated but not applied'));
+    // Replace files with the LLM response content
+    try {
+      repoLogs.push('Writing LLM response content to files...');
+      
+      for (const file of normalizedFiles) {
+        const filePath = path.join(repoDir, file.path);
+        await fs.writeFile(filePath, llmResponse.diffs, 'utf-8');
+        repoLogs.push(chalk.green(`✓ Updated ${file.path}`));
+      }
+      
+      repoLogs.push(chalk.green('Successfully updated files with LLM response'));
       return true;
+    } catch (e: any) {
+      repoLogs.push(chalk.red(`Failed to write files: ${e.message}`));
+      await resetRepoOnFailure(context, repo, repoLogs);
+      return false;
     }
-
-    repoLogs.push('Applying diffs to repository...');
-    await applyDiff(repoDir, diffText);
-    repoLogs.push(chalk.green('Successfully applied diffs'));
-
-    return true;
   } catch (e: any) {
     const msg = e.message || String(e);
     logger.error(`Error processing repo with LLM: ${msg}`);
@@ -179,18 +150,69 @@ async function processRepoWithLLM(
 export default async (
   context: IMigrationContext,
   options: any,
-  promptArg?: string
+  promptArg?: string,
+  filepathArg?: string
 ): Promise<void> => {
   const { adapter, logger, migration } = context;
+
+  const prompt = promptArg || options.prompt;
+  const filepath = filepathArg || options.filepath;
+
+  // If filepath is provided, use simple mode: read file, send to LLM, write response
+  if (filepath) {
+    try {
+      if (!prompt || prompt.trim().length === 0) {
+        logger.error('Prompt is required');
+        process.exit(1);
+      }
+
+      if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) {
+        logger.error('Either GROQ_API_KEY or OPENAI_API_KEY must be set');
+        process.exit(1);
+      }
+
+      logger.info(`Processing file: ${filepath}`);
+
+      // Read the file
+      const fullPath = path.resolve(filepath);
+      const fileContent = await fs.readFile(fullPath, 'utf-8');
+
+      // Call LLM
+      const llmProvider = getLLMProvider();
+      const normalizedFiles = [
+        {
+          path: path.basename(filepath),
+          content: fileContent,
+        },
+      ];
+
+      logger.info('Calling LLM for code modifications...');
+      const llmResponse = await llmProvider.callLLM(prompt, normalizedFiles);
+
+      // Extract content from LLM response
+      let responseContent = llmResponse.diffs;
+
+      if (!responseContent || responseContent.trim().length === 0) {
+        logger.error('Empty LLM response');
+        process.exit(1);
+      }
+
+      // Write the response directly to the file
+      await fs.writeFile(fullPath, responseContent, 'utf-8');
+      logger.info(chalk.green(`✓ Successfully updated ${filepath}`));
+
+      return;
+    } catch (e: any) {
+      const msg = e.message || String(e);
+      logger.error(`Error processing file: ${msg}`);
+      process.exit(1);
+    }
+  }
+
+  // Original repo-based mode
   const repos = migration.repos || [];
 
   console.log('Applying migration with LLM to repos:', repos);
-
-  const prompt = promptArg || options.prompt;
-  if (!prompt || prompt.trim().length === 0) {
-    logger.error('Prompt is required');
-    process.exit(1);
-  }
 
   if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) {
     logger.error('Either GROQ_API_KEY or OPENAI_API_KEY must be set');

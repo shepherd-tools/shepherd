@@ -2,32 +2,45 @@
 
 ## Overview
 
-The `applywithLLM` command is a powerful Shepherd command that leverages Large Language Models (LLMs) to generate and apply code modifications across multiple repositories. It integrates with LLM providers (currently OpenAI) to:
+The `applywithLLM` command is a powerful Shepherd command that leverages Large Language Models (LLMs) to generate and apply code modifications across multiple repositories or to individual files. It integrates with LLM providers (OpenAI and Groq) to:
 
 1. Accept a natural language prompt describing the desired code changes
 2. Send the prompt along with file contents to the LLM
-3. Receive unified diffs from the LLM
-4. Validate the diffs using `git apply --check`
-5. Apply the validated diffs to the repository
+3. Receive modified file content from the LLM
+4. Write the response directly to the specified file(s)
 
 ## Usage
 
+### Mode 1: Single File (Direct Mode)
+
+Process a single file and write the LLM response directly:
+
 ```bash
-shepherd applywithllm <migration> <prompt> [options]
+shepherd applywithllm "<prompt>" <filepath>
 ```
 
-### Basic Example
+### Mode 2: Multiple Repositories (Repo Mode)
 
+Apply changes across multiple repositories defined in your migration:
+
+```bash
+shepherd applywithllm <migration> "@files <files> <prompt>"
+```
+
+### Examples
+
+#### Direct File Mode
+```bash
+shepherd applywithllm "Add groq-sdk==0.5.0 as a new dependency" requirements.txt
+```
+
+#### Repo Mode with File Specification
 ```bash
 shepherd applywithllm my-migration "@files src/utils.ts,src/helpers.ts Refactor these utilities to use async/await patterns"
 ```
 
-### With Options
-
+#### With Options
 ```bash
-# Dry run - validate without applying
-shepherd applywithllm my-migration "@files src/app.ts Modernize the code" --dry-run
-
 # Target specific repositories
 shepherd applywithllm my-migration "@files src/app.ts Fix the bug" --repos repo1,repo2
 ```
@@ -36,24 +49,36 @@ shepherd applywithllm my-migration "@files src/app.ts Fix the bug" --repos repo1
 
 The command requires the following environment variables to be set:
 
-### Required
-- **`GROQ_API_KEY`**: Your LLM provider's API key (e.g., OpenAI API key)
+### Required (choose one)
+- **`OPENAI_API_KEY`**: Your OpenAI API key
   ```bash
-  export GROQ_API_KEY="sk-..."
+  export OPENAI_API_KEY="sk-..."
+  ```
+- **`GROQ_API_KEY`**: Your Groq API key
+  ```bash
+  export GROQ_API_KEY="gsk-..."
   ```
 
 ### Optional
-- **`GROQ_MODEL`**: The LLM model to use (default: `gpt-4`)
+- **`OPENAI_MODEL`**: The OpenAI model to use (default: `gpt-3.5-turbo`)
   ```bash
-  export GROQ_MODEL="gpt-4-turbo"
+  export OPENAI_MODEL="gpt-4-turbo"
+  ```
+- **`GROQ_MODEL`**: The Groq model to use (default: `llama-3.3-70b-versatile`)
+  ```bash
+  export GROQ_MODEL="mixtral-8x7b-32768"
   ```
 
 ## Command Options
 
-- **`--dry-run`**: Validate diffs without applying them. Useful for testing prompts.
+### Repo Mode Options
+- **`--dry-run`**: Validate diffs without applying them (repo mode only)
 - **`--skip-validation`**: Skip diff validation (not recommended, use with caution)
 - **`--repos <repos>`**: Comma-separated list of specific repositories to operate on
 - **`--upstreamOwner <owner>`**: Upstream owner for fork-based workflows
+
+### Direct File Mode
+- No additional options needed; the file is updated directly
 
 ## Prompt Format
 
@@ -77,80 +102,124 @@ The prompt can include:
 
 ## How It Works
 
-### Step 1: File Context Gathering
+## How It Works
+
+### Direct File Mode
+
+**Step 1: File Reading**
+The command reads the file from the provided filepath.
+
+**Step 2: LLM Invocation**
+The file content and prompt are sent to the configured LLM (OpenAI or Groq). The LLM is instructed to respond with only the complete modified file content.
+
+**Step 3: Content Extraction**
+The response is extracted from the LLM API response (`choices[0].message.content`).
+
+**Step 4: File Writing**
+The modified content is written directly to the specified filepath, replacing the original content.
+
+### Repo Mode
+
+**Step 1: File Context Gathering**
 The command reads the specified files from the checked-out repository and includes their contents in the LLM prompt.
 
-### Step 2: LLM Invocation
-The full prompt (original instruction + file contents + formatting guidelines) is sent to the configured LLM. The LLM is instructed to respond with unified diff format.
+**Step 2: LLM Invocation**
+The full prompt (original instruction + file contents + formatting guidelines) is sent to the configured LLM.
 
-### Step 3: Diff Validation
-Before applying any changes, the diffs are validated using `git apply --check`. This ensures:
-- The diff format is correct
-- The changes can be applied without conflicts
-- No file is missing or corrupted
+**Step 3: Content Extraction**
+The modified content is extracted from the LLM response.
 
-### Step 4: Diff Application
-Once validated, the diffs are applied to the working directory using `git apply`.
+**Step 4: File Writing**
+The modified content is written directly to the repository files.
 
-### Step 5: Repository Reset on Failure
-If any step fails (validation, application, etc.), the repository is automatically reset to prevent partial changes.
+**Step 5: Repository Reset on Failure**
+If any step fails, the repository is automatically reset to prevent partial changes.
 
 ## Example Scenarios
 
-### Scenario 1: Modern TypeScript Migration
+### Scenario 1: Update Dependencies in requirements.txt
 ```bash
-export GROQ_API_KEY="sk-..."
+export OPENAI_API_KEY="sk-..."
+shepherd applywithllm "Add groq-sdk==0.5.0 as a new line" requirements.txt
+```
+
+### Scenario 2: Modern TypeScript Migration (Repo Mode)
+```bash
 shepherd applywithllm migration-typescript "@files src/legacy.ts Migrate this file to TypeScript with strict mode enabled"
 ```
 
-### Scenario 2: Framework Upgrade
+### Scenario 3: Framework Upgrade (Repo Mode)
 ```bash
-shepherd applywithllm react-upgrade "@files src/App.tsx,src/components/*.tsx Update React imports from v17 to v18 patterns" --dry-run
+shepherd applywithllm react-upgrade "@files src/App.tsx,src/components/*.tsx Update React imports from v17 to v18 patterns" --repos target-repo
 ```
 
-### Scenario 3: Code Style Refactoring
+### Scenario 4: Code Style Refactoring (Repo Mode)
 ```bash
 shepherd applywithllm lint-fixes "@files src/**/*.ts Convert var and let declarations to const where possible" --repos target-repo
 ```
 
 ## API Response Format
 
-The LLM is expected to respond with unified diff format:
+The LLM responds with plain text content representing the complete modified file:
 
+### Direct File Mode Example
+
+**Request:**
 ```
---- a/src/file.ts
-+++ b/src/file.ts
-@@ -10,5 +10,5 @@
- const helper = () => {
--  return new Promise((resolve) => {
-+  return new Promise<void>((resolve) => {
-     resolve();
-   });
+Task: Add groq-sdk==0.5.0 as a new line to requirements.txt
+
+Current file content:
+psycopg2-binary
+openai
+langchain
 ```
+
+**Response:**
+```
+psycopg2-binary
+openai
+langchain
+langchain-community
+pypdf
+langchain-openai
+ipykernel
+langgraph
+groq-sdk==0.5.0
+```
+
+The response is written directly to the file, replacing its entire content.
 
 ## Error Handling
 
 The command includes comprehensive error handling:
 
-1. **Missing API Key**: Exits with error if `GROQ_API_KEY` is not set
+### Direct File Mode
+1. **Missing Filepath**: Exits with error if filepath is not provided
+2. **File Not Found**: Exits with error if the file doesn't exist
+3. **Empty Prompt**: Exits with error if prompt is empty
+4. **API Key Missing**: Exits with error if neither `OPENAI_API_KEY` nor `GROQ_API_KEY` is set
+5. **Empty LLM Response**: Exits with error if the LLM returns no content
+6. **File Write Failed**: Logs error if unable to write to the file
+
+### Repo Mode
+1. **Missing API Key**: Exits with error if `OPENAI_API_KEY` or `GROQ_API_KEY` is not set
 2. **Empty Prompt**: Requires a non-empty prompt argument
 3. **File Not Found**: Logs error if specified files don't exist in repo
-4. **Invalid Diff**: Rejects diffs that don't pass `git apply --check`
-5. **LLM Errors**: Catches and logs API errors with descriptive messages
-6. **Application Failures**: Automatically resets repository on failure
+4. **LLM Errors**: Catches and logs API errors with descriptive messages
+5. **Application Failures**: Automatically resets repository on failure
 
 ## Best Practices
 
-### 1. Test with Dry Run
-Always test your prompt first with `--dry-run`:
+### 1. For Direct File Mode
+Be explicit about the expected output:
 ```bash
-shepherd applywithllm migration my-prompt --dry-run
+shepherd applywithllm "Return ONLY the complete modified file content with groq-sdk==0.5.0 added. Do not include markdown or explanations." requirements.txt
 ```
 
-### 2. Start Small
-Test with a few files before applying to many repositories:
+### 2. For Repo Mode - Test with Specific Repos
+Test with a few repositories before applying to many:
 ```bash
-shepherd applywithllm migration my-prompt --repos single-test-repo
+shepherd applywithllm migration "@files src/app.ts Fix the bug" --repos single-test-repo
 ```
 
 ### 3. Be Specific in Prompts
@@ -161,14 +230,13 @@ Provide clear, detailed instructions:
 ### 4. Include Context
 Help the LLM understand what to look for:
 ```
-"@files src/handlers.ts Convert all callbacks to async/await, maintain error handling"
+"Convert all callbacks to async/await, maintain error handling"
 ```
 
-### 5. Review Generated Diffs
-Even though diffs are validated, review the applied changes:
-```bash
-# After applying, check the diff
-git diff
+### 5. Avoid Markdown in Responses
+For direct file mode, instruct the LLM to avoid code fences:
+```
+"Return ONLY the modified content without markdown, code fences, or explanations"
 ```
 
 ## Implementation Details
@@ -178,44 +246,65 @@ git diff
 - [llm.ts](../services/llm.ts) - LLM provider integration
 - [git-diff.ts](../util/git-diff.ts) - Git diff validation and application utilities
 
-### Supported LLM Providers
+## Supported LLM Providers
+
 Currently supported:
-- OpenAI (GPT-4, GPT-4-Turbo, etc.)
+- **OpenAI**: GPT-4, GPT-4-Turbo, GPT-3.5-Turbo
+  - Set `OPENAI_API_KEY` environment variable
+  - Optionally set `OPENAI_MODEL` (default: `gpt-3.5-turbo`)
 
-Future support:
-- Anthropic Claude
-- Google Gemini
-- Local LLM instances
+- **Groq**: Llama-3.3-70b, Mixtral-8x7b, and other fast inference models
+  - Set `GROQ_API_KEY` environment variable
+  - Optionally set `GROQ_MODEL` (default: `llama-3.3-70b-versatile`)
 
-### Diff Validation
-Uses `git apply --check` to validate diffs without modifying files. This ensures:
-- Syntax correctness
-- No merge conflicts
-- File paths are valid
+The provider is selected based on which API key is available (OpenAI takes precedence if both are set).
 
 ## Troubleshooting
 
-### "GROQ_API_KEY is not set"
+### "OPENAI_API_KEY or GROQ_API_KEY is not set"
+Set at least one API key:
 ```bash
-export GROQ_API_KEY="your-api-key"
+export OPENAI_API_KEY="sk-..."
+# or
+export GROQ_API_KEY="gsk-..."
 ```
 
-### "Diff validation failed"
-- LLM may have generated invalid diff format
-- Try a simpler, more specific prompt
-- Use `--dry-run` to inspect the exact diff error
+### "File not found"
+In direct file mode, verify the filepath is correct:
+```bash
+shepherd applywithllm "Your prompt" /correct/path/to/file.txt
+```
 
-### "File not found in repository"
-- Verify file paths in your prompt are relative to repo root
-- Check that `@files` directive lists correct paths
+In repo mode, ensure file paths are relative to repo root:
+```bash
+shepherd applywithllm migration "@files src/app.ts Your prompt"
+```
 
-### "Failed to read file"
-- Ensure all files are committed or visible in working directory
+### "Empty LLM response"
+The LLM returned no content. Try:
+- Simplifying your prompt
+- Being more explicit about the expected output
+- Using a different model via environment variables
+
+### "Failed to write file"
 - Check file permissions
+- Ensure the directory exists
+- Verify disk space availability
 
 ## Advanced Usage
 
-### Custom Prompts with Reasoning
+### Custom Prompts for Direct File Mode
+```bash
+shepherd applywithllm "
+Update dependencies in requirements.txt:
+1. Add groq-sdk==0.5.0
+2. Ensure all packages have version pinning
+3. Remove any duplicate entries
+Return ONLY the complete updated file content.
+" requirements.txt
+```
+
+### Custom Prompts for Repo Mode
 ```bash
 shepherd applywithllm migration "
 @files src/complex-logic.ts
@@ -227,32 +316,39 @@ Refactor this file to improve readability:
 "
 ```
 
-### Batch Processing
+### Batch Processing (Repo Mode)
 The command automatically processes all checked-out repositories. For selective execution:
 ```bash
-# Process only specific repos
-shepherd applywithllm migration my-prompt --repos repo1,repo2,repo3
+shepherd applywithllm migration "@files src/app.ts Your prompt" --repos repo1,repo2,repo3
 ```
 
 ## Performance Considerations
 
-- **LLM Call Time**: Varies based on model and file sizes. Plan for 10-30 seconds per repository.
-- **File Size Limits**: For very large files, consider breaking into smaller units or using `--repos` to limit scope.
-- **API Costs**: Each repository processed incurs an LLM API call. Budget accordingly.
+### Direct File Mode
+- **LLM Call Time**: Typically 2-10 seconds depending on file size and model
+- **File Size**: Works efficiently with files up to several MB
+- **API Costs**: Single LLM call per execution
+
+### Repo Mode
+- **LLM Call Time**: 10-30 seconds per repository depending on file count and sizes
+- **File Size Limits**: For very large files, consider breaking into smaller units or using `--repos` to limit scope
+- **API Costs**: One LLM call per repository processed
 
 ## Security Notes
 
 - API keys are read from environment variables, not passed as arguments
-- Files are read from the local checked-out repositories
-- Diffs are validated before application to prevent arbitrary code execution
-- Repository state is preserved if errors occur
+- In direct mode, files are read from the provided filepath (no repository context)
+- In repo mode, files are read from the local checked-out repositories
+- File content is sent to external LLM APIs; avoid sensitive or confidential data
+- Repository state is preserved if errors occur in repo mode
 
 ## Future Enhancements
 
 Planned features:
-- [ ] Support for multiple LLM providers (Anthropic, Google, etc.)
-- [ ] Cached file reading for performance
+- [ ] Support for additional LLM providers (Anthropic Claude, Google Gemini, etc.)
+- [ ] Streaming responses for large files
 - [ ] Parallel LLM calls for faster processing
 - [ ] Interactive prompt refinement
-- [ ] Custom diff output formats
-- [ ] Pre-validation with static analysis
+- [ ] Caching for repeated prompts
+- [ ] Batch mode with configuration files
+- [ ] Output validation with custom rules

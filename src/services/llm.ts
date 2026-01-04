@@ -27,19 +27,13 @@ export class GroqProvider implements ILLMProvider {
   async callLLM(prompt: string, files: FileContent[]): Promise<LLMResponse> {
     const originalFile = files[0]; // For now, assume single file
     const fileContent = originalFile.content;
-    const lines = fileContent.split('\n');
     
     const userPrompt = `Task: ${prompt}
 
-Current file has ${lines.length} lines:
-${lines.map((line, i) => `Line ${i + 1}: ${line}`).join('\n')}
+Current file content:
+${fileContent}
 
-Respond in this exact JSON format with ALL current lines plus any new lines:
-{
-  "lines": ["line1", "line2", "line3", ...]
-}
-
-Include every single line from the file in the correct order, with modifications applied.`;
+Respond with ONLY the complete modified file content. Do not include markdown, code fences, or explanations.`;
 
     const messages = [
       {
@@ -48,7 +42,9 @@ Include every single line from the file in the correct order, with modifications
       }
     ];
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    console.log('Groq API request prompt:', userPrompt);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -82,102 +78,23 @@ Include every single line from the file in the correct order, with modifications
       throw new Error('No content received from Groq API');
     }
 
-    // Try to parse JSON response
-    let modifiedContent: string;
-    try {
-      // First try direct JSON parsing
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        // Handle both "modified_content" (string) and "lines" (array) formats
-        if (parsed.lines && Array.isArray(parsed.lines)) {
-          modifiedContent = parsed.lines.join('\n');
-        } else if (parsed.modified_content) {
-          modifiedContent = parsed.modified_content;
-        } else {
-          // Fallback: use content as-is
-          modifiedContent = content;
-        }
-      } else {
-        // If no JSON found, use the content as-is (fallback)
-        modifiedContent = content;
-      }
-    } catch (e) {
-      // If JSON parsing fails, use content as-is
-      modifiedContent = content.replace(/^```.*\n?/gm, '').replace(/\n```$/gm, '').trim();
-    }
-
-    // Generate a unified diff from original and modified content
-    const diff = this.generateUnifiedDiff(originalFile.path, fileContent, modifiedContent);
+    // Handle plain text response - remove markdown code fences if present
+    let modifiedContent = content.trim();
+    // Remove markdown code fences if present
+    modifiedContent = modifiedContent.replace(/^```[a-z]*\n?/gm, '').replace(/\n?```$/gm, '').trim();
 
     return {
-      diffs: diff,
-      reasoning: 'Modified file content via Groq API and generated unified diff',
+      diffs: modifiedContent,
+      reasoning: 'Modified file content via Groq API',
     };
   }
 
-  private generateUnifiedDiff(filePath: string, original: string, modified: string): string {
-    const origLines = original.split('\n');
-    const newLines = modified.split('\n');
-    
-    // Find the first and last changed lines
-    let firstChange = -1;
-    let lastChange = -1;
-    
-    const minLen = Math.min(origLines.length, newLines.length);
-    for (let i = 0; i < minLen; i++) {
-      if (origLines[i] !== newLines[i]) {
-        if (firstChange === -1) firstChange = i;
-        lastChange = i;
-      }
-    }
-    
-    // If lengths differ, that's a change too
-    if (origLines.length !== newLines.length) {
-      lastChange = Math.max(lastChange, Math.max(origLines.length, newLines.length) - 1);
-    }
-    
-    // If no changes found
-    if (firstChange === -1) {
-      return ''; // No diff needed
-    }
-    
-    // Build the unified diff with context
-    const lines: string[] = [];
-    lines.push(`--- ${filePath}`);
-    lines.push(`+++ ${filePath}`);
-    
-    // Add context before first change (up to 3 lines)
-    const contextStart = Math.max(0, firstChange - 3);
-    const contextEnd = Math.min(Math.max(origLines.length, newLines.length), lastChange + 3);
-    
-    // Hunk header
-    const origCount = Math.min(origLines.length - contextStart, contextEnd - contextStart);
-    const newCount = newLines.length - contextStart;
-    lines.push(`@@ -${contextStart + 1},${origCount} +${contextStart + 1},${newCount} @@`);
-    
-    // Output context and changes
-    for (let i = contextStart; i < contextEnd; i++) {
-      const origLine = i < origLines.length ? origLines[i] : null;
-      const newLine = i < newLines.length ? newLines[i] : null;
-      
-      if (origLine === newLine) {
-        // Context line (unchanged)
-        lines.push(` ${origLine}`);
-      } else {
-        // Changed line
-        if (origLine !== null) lines.push(`-${origLine}`);
-        if (newLine !== null) lines.push(`+${newLine}`);
-      }
-    }
-    
-    return lines.join('\n');
-  }
+ 
 }
 
 export function getLLMProvider(apiKey?: string, model?: string): ILLMProvider {
   // Try OpenAI first if key is available
-  const openaiApiKey = apiKey || process.env.OPENAI_API_KEY;
+  const openaiApiKey = process.env.OPENAI_API_KEY || apiKey;
   const groqApiKey = process.env.GROQ_API_KEY;
   
   if (openaiApiKey) {
@@ -226,19 +143,13 @@ export class OpenAIProvider implements ILLMProvider {
   async callLLM(prompt: string, files: FileContent[]): Promise<LLMResponse> {
     const originalFile = files[0]; // For now, assume single file
     const fileContent = originalFile.content;
-    const lines = fileContent.split('\n');
     
     const userPrompt = `Task: ${prompt}
 
-Current file has ${lines.length} lines:
-${lines.map((line, i) => `Line ${i + 1}: ${line}`).join('\n')}
+Current file content:
+${fileContent}
 
-Respond in this exact JSON format with ALL current lines plus any new lines:
-{
-  "lines": ["line1", "line2", "line3", ...]
-}
-
-Include every single line from the file in the correct order, with modifications applied.`;
+Respond with ONLY the complete modified file content. Do not include markdown, code fences, or explanations.`;
 
     const messages = [
       {
@@ -246,6 +157,8 @@ Include every single line from the file in the correct order, with modifications
         content: userPrompt,
       }
     ];
+    console.log('OpenAI API request prompt:', userPrompt);
+
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -268,7 +181,13 @@ Include every single line from the file in the correct order, with modifications
     }
 
     const data = await response.json();
+    console.log('OpenAI API full response:', JSON.stringify(data, null, 2));
     let content = data.choices[0]?.message?.content;
+    
+    // Save response to file for debugging
+    const responseFile = path.join(process.cwd(), 'openai_response.json');
+    await fs.writeFile(responseFile, JSON.stringify(data, null, 2), 'utf-8');
+    console.log(`OpenAI response saved to ${responseFile}`);
     
     if (process.env.DEBUG_LLM === 'true') {
       console.log('\n=== OpenAI API RESPONSE ===');
@@ -281,95 +200,15 @@ Include every single line from the file in the correct order, with modifications
       throw new Error('No content received from OpenAI API');
     }
 
-    // Try to parse JSON response
-    let modifiedContent: string;
-    try {
-      // First try direct JSON parsing
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        // Handle both "modified_content" (string) and "lines" (array) formats
-        if (parsed.lines && Array.isArray(parsed.lines)) {
-          modifiedContent = parsed.lines.join('\n');
-        } else if (parsed.modified_content) {
-          modifiedContent = parsed.modified_content;
-        } else {
-          // Fallback: use content as-is
-          modifiedContent = content;
-        }
-      } else {
-        // If no JSON found, use the content as-is (fallback)
-        modifiedContent = content;
-      }
-    } catch (e) {
-      // If JSON parsing fails, use content as-is
-      modifiedContent = content.replace(/^```.*\n?/gm, '').replace(/\n```$/gm, '').trim();
-    }
-
-    // Generate a unified diff from original and modified content
-    const diff = this.generateUnifiedDiff(originalFile.path, fileContent, modifiedContent);
+    // Handle plain text response - remove markdown code fences if present
+    let modifiedContent = content.trim();
+    // Remove markdown code fences if present
+    modifiedContent = modifiedContent.replace(/^```[a-z]*\n?/gm, '').replace(/\n?```$/gm, '').trim();
 
     return {
-      diffs: diff,
-      reasoning: 'Modified file content via OpenAI API and generated unified diff',
+      diffs: modifiedContent,
+      reasoning: 'Modified file content via OpenAI API',
     };
   }
 
-  private generateUnifiedDiff(filePath: string, original: string, modified: string): string {
-    const origLines = original.split('\n');
-    const newLines = modified.split('\n');
-    
-    // Find the first and last changed lines
-    let firstChange = -1;
-    let lastChange = -1;
-    
-    const minLen = Math.min(origLines.length, newLines.length);
-    for (let i = 0; i < minLen; i++) {
-      if (origLines[i] !== newLines[i]) {
-        if (firstChange === -1) firstChange = i;
-        lastChange = i;
-      }
-    }
-    
-    // If lengths differ, that's a change too
-    if (origLines.length !== newLines.length) {
-      lastChange = Math.max(lastChange, Math.max(origLines.length, newLines.length) - 1);
-    }
-    
-    // If no changes found
-    if (firstChange === -1) {
-      return ''; // No diff needed
-    }
-    
-    // Build the unified diff with context
-    const lines: string[] = [];
-    lines.push(`--- a/${filePath}`);
-    lines.push(`+++ b/${filePath}`);
-    
-    // Add context before first change (up to 3 lines)
-    const contextStart = Math.max(0, firstChange - 3);
-    const contextEnd = Math.min(Math.max(origLines.length, newLines.length), lastChange + 3);
-    
-    // Hunk header
-    const origCount = Math.min(origLines.length - contextStart, contextEnd - contextStart);
-    const newCount = newLines.length - contextStart;
-    lines.push(`@@ -${contextStart + 1},${origCount} +${contextStart + 1},${newCount} @@`);
-    
-    // Output context and changes
-    for (let i = contextStart; i < contextEnd; i++) {
-      const origLine = i < origLines.length ? origLines[i] : null;
-      const newLine = i < newLines.length ? newLines[i] : null;
-      
-      if (origLine === newLine) {
-        // Context line (unchanged)
-        lines.push(` ${origLine}`);
-      } else {
-        // Changed line
-        if (origLine !== null) lines.push(`-${origLine}`);
-        if (newLine !== null) lines.push(`+${newLine}`);
-      }
-    }
-    
-    return lines.join('\n');
-  }
 }

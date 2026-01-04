@@ -204,6 +204,7 @@ There are a number of commands that must be run to execute a migration:
 
 - `checkout`: Determines which repositories are candidates for migration and clones or updates the repositories on your machine. Clones are "shallow", containing no git history. Uses `should_migrate` to decide if a repository should be kept after it's checked out.
 - `apply`: Performs the migration using the `apply` hook discussed above.
+- `applywithllm`: Applies code changes using Large Language Models (LLM). Supports both single-file direct mode and multi-repository mode. See [ApplyWithLLM documentation](docs/applywithllm.md) for details.
 - `commit`: Makes a commit with any changes that were made during the `apply` step, including adding newly-created files. The migration's `title` will be prepended with `[shepherd]` and used as the commit message.
 - `push`: Pushes all commits to their respective repositories.
 - `pr-preview`: Prints the commit message that would be used for each repository without actually creating a PR; uses the `pr_message` hook.
@@ -217,6 +218,37 @@ By default, `checkout` will use the adapter to figure out which repositories to 
 ```sh
 shepherd checkout path/to/migration --repos facebook/react,google/protobuf
 ```
+
+Run `shepherd --help` to see all available commands and descriptions for each one.
+
+## ApplyWithLLM Command
+
+The `applywithllm` command leverages Large Language Models (LLMs) like OpenAI's GPT or Groq to automatically apply code changes. It supports two modes:
+
+### Direct File Mode
+
+Apply changes to a single file using an LLM:
+
+```sh
+export OPENAI_API_KEY="sk-..."
+shepherd applywithllm "Add groq-sdk==0.5.0 as a new dependency" requirements.txt
+```
+
+### Repo Mode
+
+Apply changes across multiple repositories defined in a migration:
+
+```sh
+shepherd applywithllm my-migration "@files src/app.ts Modernize the code" --repos repo1,repo2
+```
+
+### Requirements
+
+Set at least one LLM provider:
+- `OPENAI_API_KEY` for OpenAI (GPT-3.5, GPT-4, etc.)
+- `GROQ_API_KEY` for Groq (fast inference models)
+
+For detailed documentation, examples, and best practices, see the [ApplyWithLLM guide](docs/applywithllm.md).
 
 Run `shepherd --help` to see all available commands and descriptions for each one.
 

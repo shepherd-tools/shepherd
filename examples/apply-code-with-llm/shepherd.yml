@@ -8,10 +8,9 @@ adapter:
 
 applywithllm:
   enabled: true
-  prompt: "Modernize code to use async/await patterns"
+  prompt: "Return ONLY the complete modified requirements.txt file content with groq-sdk==0.5.0 added as a new line. Do not include any markdown, code fences, or explanations."
   files:
-    - src/utils.ts
-    - src/helpers.ts
+    - kavitha186/code_review_fix/requirements.txt
   model: gpt-4-turbo
   dryRun: false
   skipValidation: false
