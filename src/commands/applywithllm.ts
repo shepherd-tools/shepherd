@@ -211,7 +211,7 @@ export default async (
   // Original repo-based mode
   const repos = migration.repos || [];
 
-  console.log('Applying migration with LLM to repos:', repos);
+  logger.info('Applying migration with LLM to repos:', repos);
 
   if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) {
     logger.error('Either GROQ_API_KEY or OPENAI_API_KEY must be set');
