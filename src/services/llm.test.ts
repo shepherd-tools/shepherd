@@ -16,7 +16,9 @@ describe('LLM Service', () => {
 
   describe('getLLMProvider', () => {
     it('should throw error when API key is not provided', () => {
-      expect(() => getLLMProvider()).toThrow('Groq API key not provided');
+      expect(() => getLLMProvider()).toThrow(
+        'No LLM API key found. Set OPENAI_API_KEY or GROQ_API_KEY environment variable.'
+      );
     });
 
     it('should return provider with provided API key', () => {
