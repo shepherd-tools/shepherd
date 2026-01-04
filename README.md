@@ -245,6 +245,7 @@ shepherd applywithllm my-migration "@files src/app.ts Modernize the code" --repo
 ### Requirements
 
 Set at least one LLM provider:
+
 - `OPENAI_API_KEY` for OpenAI (GPT-3.5, GPT-4, etc.)
 - `GROQ_API_KEY` for Groq (fast inference models)
 

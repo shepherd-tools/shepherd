@@ -27,7 +27,7 @@ export class GroqProvider implements ILLMProvider {
   async callLLM(prompt: string, files: FileContent[]): Promise<LLMResponse> {
     const originalFile = files[0]; // For now, assume single file
     const fileContent = originalFile.content;
-    
+
     const userPrompt = `Task: ${prompt}
 
 Current file content:
@@ -39,7 +39,7 @@ Respond with ONLY the complete modified file content. Do not include markdown, c
       {
         role: 'user',
         content: userPrompt,
-      }
+      },
     ];
 
     console.log('Groq API request prompt:', userPrompt);
@@ -47,7 +47,7 @@ Respond with ONLY the complete modified file content. Do not include markdown, c
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -66,14 +66,14 @@ Respond with ONLY the complete modified file content. Do not include markdown, c
 
     const data = await response.json();
     let content = data.choices[0]?.message?.content;
-    
+
     if (process.env.DEBUG_LLM === 'true') {
       console.log('\n=== LLM API RESPONSE ===');
       console.log('Full response:', JSON.stringify(data, null, 2).substring(0, 500));
       console.log('Content:', content?.substring(0, 200));
       console.log('=== END ===\n');
     }
-    
+
     if (!content) {
       throw new Error('No content received from Groq API');
     }
@@ -81,32 +81,33 @@ Respond with ONLY the complete modified file content. Do not include markdown, c
     // Handle plain text response - remove markdown code fences if present
     let modifiedContent = content.trim();
     // Remove markdown code fences if present
-    modifiedContent = modifiedContent.replace(/^```[a-z]*\n?/gm, '').replace(/\n?```$/gm, '').trim();
+    modifiedContent = modifiedContent
+      .replace(/^```[a-z]*\n?/gm, '')
+      .replace(/\n?```$/gm, '')
+      .trim();
 
     return {
       diffs: modifiedContent,
       reasoning: 'Modified file content via Groq API',
     };
   }
-
- 
 }
 
 export function getLLMProvider(apiKey?: string, model?: string): ILLMProvider {
   // Try OpenAI first if key is available
   const openaiApiKey = process.env.OPENAI_API_KEY || apiKey;
   const groqApiKey = process.env.GROQ_API_KEY;
-  
+
   if (openaiApiKey) {
     return new OpenAIProvider(openaiApiKey, model);
   }
-  
+
   // Fall back to Groq if available
   if (groqApiKey) {
     const selectedModel = model || process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
     return new GroqProvider(groqApiKey, selectedModel);
   }
-  
+
   throw new Error('No LLM API key found. Set OPENAI_API_KEY or GROQ_API_KEY environment variable.');
 }
 
@@ -143,7 +144,7 @@ export class OpenAIProvider implements ILLMProvider {
   async callLLM(prompt: string, files: FileContent[]): Promise<LLMResponse> {
     const originalFile = files[0]; // For now, assume single file
     const fileContent = originalFile.content;
-    
+
     const userPrompt = `Task: ${prompt}
 
 Current file content:
@@ -155,15 +156,14 @@ Respond with ONLY the complete modified file content. Do not include markdown, c
       {
         role: 'user' as const,
         content: userPrompt,
-      }
+      },
     ];
     console.log('OpenAI API request prompt:', userPrompt);
-
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -183,19 +183,19 @@ Respond with ONLY the complete modified file content. Do not include markdown, c
     const data = await response.json();
     console.log('OpenAI API full response:', JSON.stringify(data, null, 2));
     let content = data.choices[0]?.message?.content;
-    
+
     // Save response to file for debugging
     const responseFile = path.join(process.cwd(), 'openai_response.json');
     await fs.writeFile(responseFile, JSON.stringify(data, null, 2), 'utf-8');
     console.log(`OpenAI response saved to ${responseFile}`);
-    
+
     if (process.env.DEBUG_LLM === 'true') {
       console.log('\n=== OpenAI API RESPONSE ===');
       console.log('Full response:', JSON.stringify(data, null, 2).substring(0, 500));
       console.log('Content:', content?.substring(0, 200));
       console.log('=== END ===\n');
     }
-    
+
     if (!content) {
       throw new Error('No content received from OpenAI API');
     }
@@ -203,12 +203,14 @@ Respond with ONLY the complete modified file content. Do not include markdown, c
     // Handle plain text response - remove markdown code fences if present
     let modifiedContent = content.trim();
     // Remove markdown code fences if present
-    modifiedContent = modifiedContent.replace(/^```[a-z]*\n?/gm, '').replace(/\n?```$/gm, '').trim();
+    modifiedContent = modifiedContent
+      .replace(/^```[a-z]*\n?/gm, '')
+      .replace(/\n?```$/gm, '')
+      .trim();
 
     return {
       diffs: modifiedContent,
       reasoning: 'Modified file content via OpenAI API',
     };
   }
-
 }

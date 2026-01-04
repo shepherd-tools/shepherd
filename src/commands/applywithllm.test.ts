@@ -151,4 +151,3 @@ describe('applywithllm command', () => {
     expect(mockAdapter.resetChangedFiles).toHaveBeenCalled();
   });
 });
-

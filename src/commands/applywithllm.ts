@@ -80,7 +80,6 @@ async function processRepoWithLLM(
     const fileContents = await readFilesForContext(repoDir, filesToModify);
     repoLogs.push(`Loaded ${fileContents.length} files for LLM processing`);
 
-
     console.log('Files sent to LLM:', fileContents);
     // Normalize content → raw text (CRITICAL)
     const normalizedFiles = fileContents.map((f: any) => {
@@ -124,13 +123,13 @@ async function processRepoWithLLM(
     // Replace files with the LLM response content
     try {
       repoLogs.push('Writing LLM response content to files...');
-      
+
       for (const file of normalizedFiles) {
         const filePath = path.join(repoDir, file.path);
         await fs.writeFile(filePath, llmResponse.diffs, 'utf-8');
         repoLogs.push(chalk.green(`✓ Updated ${file.path}`));
       }
-      
+
       repoLogs.push(chalk.green('Successfully updated files with LLM response'));
       return true;
     } catch (e: any) {

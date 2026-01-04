@@ -49,6 +49,7 @@ shepherd applywithllm my-migration "@files src/utils.ts Convert callback functio
 ```
 
 What happens:
+
 1. Reads `src/utils.ts` from each checked-out repository
 2. Sends it to OpenAI with your refactoring instructions
 3. Receives unified diffs back
@@ -114,6 +115,7 @@ OUTPUT (Modified repository with new code changes)
 ### Error Handling
 
 If anything fails:
+
 - ❌ File not found → Skip repository
 - ❌ LLM API error → Reset and skip
 - ❌ Diff validation fails → Reset and skip
@@ -227,6 +229,7 @@ export GROQ_API_KEY="sk-your-key"
 ### "Diff validation failed"
 
 The LLM may have generated an invalid diff. Try:
+
 1. Use `--dry-run` first to see the error
 2. Refine your prompt to be more specific
 3. Use a simpler, more targeted prompt
@@ -235,6 +238,7 @@ The LLM may have generated an invalid diff. Try:
 ### "File not found: src/example.ts"
 
 Ensure:
+
 - File paths are relative to repository root
 - Spell file names correctly
 - Files are actually committed (not untracked)
@@ -251,23 +255,27 @@ Ensure:
 ### ✅ DO:
 
 1. **Test with dry-run first**
+
    ```bash
    shepherd applywithllm migration "prompt" --dry-run
    ```
 
 2. **Start with small, targeted changes**
+
    ```bash
    # Good: One clear transformation
    "@files utils.ts Convert to async/await"
    ```
 
 3. **Be specific in your prompt**
+
    ```bash
    # Better than vague
    "@files app.ts Add error handling to all functions"
    ```
 
 4. **Test one repo first**
+
    ```bash
    shepherd applywithllm migration "prompt" --repos single-test-repo
    ```
@@ -298,11 +306,13 @@ Plan accordingly for batch migrations on many repositories.
 ## Limitations & Future Work
 
 Current limitations:
+
 - Single LLM provider (OpenAI only, for now)
 - Sequential processing (one repo at a time)
 - No caching between runs
 
 Planned improvements:
+
 - [ ] Support for Anthropic Claude API
 - [ ] Support for Google Gemini API
 - [ ] Parallel processing for speed
@@ -313,6 +323,7 @@ Planned improvements:
 ## Support & Contribution
 
 For issues, feature requests, or contributions:
+
 - Check [docs/applywithllm.md](docs/applywithllm.md) for full documentation
 - Review test files for usage examples
 - Check [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) for technical details
