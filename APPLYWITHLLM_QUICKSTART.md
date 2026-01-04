@@ -7,19 +7,21 @@ The `applywithllm` command is now part of Shepherd. It has been fully integrated
 ### Prerequisites
 
 1. **Node.js 18+** (for built-in fetch support)
-2. **OpenAI API Key** - Get one from [platform.openai.com](https://platform.openai.com/api-keys)
+2. **LLM API Key** - Get one from [platform.openai.com](https://platform.openai.com/api-keys) (OpenAI) or [console.groq.com](https://console.groq.com/keys) (Groq)
 3. **Git** - Must be installed on your system
 
 ### Configuration
 
-Set your OpenAI API key as an environment variable:
+Set your LLM API key as an environment variable (choose OpenAI or Groq):
 
 ```bash
-# Export the API key (add to .bashrc or .zshrc for persistence)
-export GROQ_API_KEY="sk-your-openai-api-key-here"
+# Option 1: OpenAI (recommended for best results)
+export OPENAI_API_KEY="sk-your-openai-key-here"
+export OPENAI_MODEL="gpt-4"  # or gpt-4-turbo, gpt-3.5-turbo, etc. (defaults to gpt-3.5-turbo)
 
-# Optionally set the model (defaults to gpt-4)
-export GROQ_MODEL="gpt-4-turbo"  # or gpt-4, gpt-3.5-turbo, etc.
+# Option 2: Groq (faster, open-source models)
+export GROQ_API_KEY="gsk_your-groq-key-here"
+export GROQ_MODEL="llama-3.3-70b-versatile"  # or mixtral-8x7b-32768, etc. (defaults to llama-3.3-70b-versatile)
 ```
 
 ## Command Syntax
@@ -51,7 +53,7 @@ shepherd applywithllm my-migration "@files src/utils.ts Convert callback functio
 What happens:
 
 1. Reads `src/utils.ts` from each checked-out repository
-2. Sends it to OpenAI with your refactoring instructions
+2. Sends it to the LLM (OpenAI or Groq) with your refactoring instructions
 3. Receives unified diffs back
 4. Validates diffs using `git apply --check`
 5. Applies the changes to your repositories
@@ -103,7 +105,7 @@ INPUT (Natural Language Prompt + Files)
         ↓
 3. READ: Load file contents
         ↓
-4. CALL LLM: Send prompt + context to OpenAI
+4. CALL LLM: Send prompt + context to LLM provider (OpenAI or Groq)
         ↓
 5. VALIDATE DIFFS: Check patches with git apply --check
         ↓
@@ -130,7 +132,7 @@ Repositories are **automatically reset** on failure, ensuring no partial changes
 Migrate from React class components to hooks:
 
 ```bash
-export GROQ_API_KEY="sk-..."
+export OPENAI_API_KEY="sk-..."  # or GROQ_API_KEY="gsk_..." for Groq
 shepherd applywithllm react-hooks-migration "@files src/components/UserProfile.tsx,src/components/Header.tsx \
   Convert these React class components to functional components with hooks. \
   Use useState for state management and useEffect for lifecycle methods."
@@ -219,11 +221,13 @@ shepherd pr my-migration
 
 ## Troubleshooting
 
-### "GROQ_API_KEY environment variable is not set"
+### "No LLM API key found" error
 
 ```bash
-# Solution: Export your API key
-export GROQ_API_KEY="sk-your-key"
+# Solution: Export either OpenAI or Groq API key
+export OPENAI_API_KEY="sk-your-openai-key"  # OpenAI format starts with "sk-"
+# OR
+export GROQ_API_KEY="gsk_your-groq-key"     # Groq format starts with "gsk_"
 ```
 
 ### "Diff validation failed"
@@ -245,10 +249,14 @@ Ensure:
 
 ### "LLM API error"
 
-- Check your API key is valid
-- Check your OpenAI account has credits
+- Check your API key is valid and in the correct format:
+  - OpenAI keys start with `sk-`
+  - Groq keys start with `gsk_`
+- Check your account has credits/quota
 - Check network connectivity
-- Verify GROQ_MODEL is valid (gpt-4, gpt-3.5-turbo, etc.)
+- Verify model name is valid:
+  - OpenAI: gpt-4, gpt-4-turbo, gpt-3.5-turbo, etc.
+  - Groq: llama-3.3-70b-versatile, mixtral-8x7b-32768, etc.
 
 ## Best Practices
 
@@ -307,7 +315,7 @@ Plan accordingly for batch migrations on many repositories.
 
 Current limitations:
 
-- Single LLM provider (OpenAI only, for now)
+- Two LLM providers supported (OpenAI and Groq)
 - Sequential processing (one repo at a time)
 - No caching between runs
 
