@@ -22,6 +22,15 @@ export interface IMigrationIssues {
   state_reason?: 'completed' | 'not_planned' | 'reopened' | null;
 }
 
+export interface IApplyWithLLMConfig {
+  enabled?: boolean;
+  prompt?: string;
+  files?: string[];
+  model?: string;
+  dryRun?: boolean;
+  skipValidation?: boolean;
+}
+
 export type MigrationPhase = [keyof IMigrationHooks];
 
 export interface IMigrationSpec {
@@ -33,6 +42,7 @@ export interface IMigrationSpec {
   };
   hooks: IMigrationHooks;
   issues?: IMigrationIssues;
+  applywithllm?: IApplyWithLLMConfig;
 }
 
 export function loadSpec(directory: string): IMigrationSpec {
@@ -66,6 +76,15 @@ export function normalizeSpec(originalSpec: any): IMigrationSpec {
 
 export function validateSpec(spec: any) {
   const hookSchema = Joi.array().items(Joi.string());
+  const applywithllmSchema = Joi.object({
+    enabled: Joi.boolean().optional(),
+    prompt: Joi.string().optional(),
+    files: Joi.array().items(Joi.string()).optional(),
+    model: Joi.string().optional(),
+    dryRun: Joi.boolean().optional(),
+    skipValidation: Joi.boolean().optional(),
+  }).optional();
+
   const schema = Joi.object({
     id: Joi.string().required(),
     title: Joi.string().required(),
@@ -88,6 +107,7 @@ export function validateSpec(spec: any) {
       state_reason: Joi.string().optional(),
       labels: hookSchema.optional(),
     }).optional(),
+    applywithllm: applywithllmSchema,
   });
 
   return schema.validate(spec);
