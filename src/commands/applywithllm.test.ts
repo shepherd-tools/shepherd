@@ -3,11 +3,9 @@ import { IMigrationContext } from '../migration-context';
 import mockAdapter from '../adapters/adapter.mock';
 import mockLogger from '../logger/logger.mock';
 import * as llmService from '../services/llm';
-import * as gitDiff from '../util/git-diff';
 import fs from 'fs-extra';
 
 jest.mock('../services/llm');
-jest.mock('../util/git-diff');
 jest.mock('fs-extra');
 
 // Mock process.exit globally - don't throw, just return
@@ -51,30 +49,16 @@ describe('applywithllm command', () => {
 
     // Default mock implementations
     mockAdapter.getRepoDir.mockReturnValue('/tmp/repo1');
+    mockAdapter.resetChangedFiles.mockResolvedValue(undefined);
     (fs.pathExists as jest.Mock).mockResolvedValue(true);
+    (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
     (llmService.readFilesForContext as jest.Mock).mockResolvedValue([
       { path: 'file1.ts', content: 'const x = 1;' },
     ]);
-    (gitDiff.validateDiff as jest.Mock).mockResolvedValue({
-      valid: true,
-      errors: [],
-      warnings: [],
-    });
-    (gitDiff.applyDiff as jest.Mock).mockResolvedValue(undefined);
-    (gitDiff.parseDiffStats as jest.Mock).mockReturnValue({
-      additions: 1,
-      deletions: 1,
-    });
-    (gitDiff.extractFilePaths as jest.Mock).mockReturnValue(['file1.ts']);
 
     const mockProvider = {
       callLLM: jest.fn().mockResolvedValue({
-        diffs: `--- a/file1.ts
-+++ b/file1.ts
-@@ -1 +1 @@
--const x = 1;
-+const x = 2;
-`,
+        diffs: 'const x = 2;',
       }),
     };
     (llmService.getLLMProvider as jest.Mock).mockReturnValue(mockProvider);
@@ -121,22 +105,27 @@ describe('applywithllm command', () => {
 
     await applywithllm(mockContext, options, prompt);
 
-    // validateDiff should be called but not applyDiff
-    expect(gitDiff.validateDiff).toHaveBeenCalled();
+    expect(mockLogger.info).toHaveBeenCalled();
   });
 
-  it('should reset repo on validation failure', async () => {
+  it('should handle empty LLM response', async () => {
     const prompt = '@files file1.ts\nRefactor this file';
-    (gitDiff.validateDiff as jest.Mock).mockResolvedValueOnce({
-      valid: false,
-      errors: ['Patch does not apply'],
-      warnings: [],
-    });
+    const mockProvider = {
+      callLLM: jest.fn().mockResolvedValue({
+        diffs: '',
+      }),
+    };
+    (llmService.getLLMProvider as jest.Mock).mockReturnValue(mockProvider);
 
     await applywithllm(mockContext, options, prompt);
 
-    // Should reset the repo on failure
-    expect(mockAdapter.resetChangedFiles).toHaveBeenCalled();
+    // Should not write the file content when response is empty (only the response JSON is written)
+    // Check that writeFile was only called once for the response JSON, not for the actual file
+    const writeFileCalls = (fs.writeFile as jest.Mock).mock.calls;
+    const fileContentWriteCalls = writeFileCalls.filter(
+      (call) => call[0] === '/tmp/repo1/file1.ts'
+    );
+    expect(fileContentWriteCalls.length).toBe(0);
   });
 
   it('should handle LLM API errors gracefully', async () => {
