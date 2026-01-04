@@ -13,6 +13,7 @@ import { loadRepoList } from './util/persisted-data.js';
 
 // Commands
 import apply from './commands/apply.js';
+import applywithllm from './commands/applywithllm.js';
 import checkout from './commands/checkout.js';
 import commit from './commands/commit.js';
 import list from './commands/list.js';
@@ -133,6 +134,48 @@ applyCommand.option(
   false
 );
 applyCommand.action(handleCommand(apply));
+
+const applywithllmCommand = buildCommand(
+  'applywithllm',
+  'Apply LLM-generated migrations to all checked out repositories'
+);
+addReposOption(applywithllmCommand);
+applywithllmCommand.argument('<prompt>', 'The prompt to send to the LLM');
+applywithllmCommand.option('--dry-run', 'Validate diffs without applying them', false);
+applywithllmCommand.option('--skip-validation', 'Skip diff validation (not recommended)', false);
+applywithllmCommand.action(async (migration: string, prompt: string, options: ICliOptions) => {
+  try {
+    const spec = loadSpec(migration);
+    const migrationWorkingDirectory = path.join(prefs.workingDirectory, spec.id);
+    await fs.ensureDir(migrationWorkingDirectory);
+
+    const migrationContext = {
+      migration: {
+        migrationDirectory: path.resolve(migration),
+        spec,
+        workingDirectory: migrationWorkingDirectory,
+      },
+      shepherd: {
+        workingDirectory: prefs.workingDirectory,
+      },
+      logger,
+    } as any;
+
+    const adapter = adapterForName(spec.adapter.type, migrationContext);
+    migrationContext.adapter = adapter;
+
+    const selectedRepos = options.repos && options.repos.map(adapter.parseRepo);
+    migrationContext.migration.selectedRepos = selectedRepos;
+
+    migrationContext.migration.repos = await loadRepoList(migrationContext);
+    migrationContext.migration.upstreamOwner = options.upstreamOwner;
+
+    await applywithllm(migrationContext, options, prompt);
+  } catch (e: any) {
+    logger.error(e);
+    process.exit(1);
+  }
+});
 
 addCommand('commit', 'Commit all changes for the specified migration', true, commit);
 addCommand('reset', 'Reset all changes for the specified migration', true, reset);

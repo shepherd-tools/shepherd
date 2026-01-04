@@ -1,6 +1,6 @@
 import IRepoAdapter, { IRepo } from './adapters/base.js';
 import { ILogger } from './logger/index.js';
-import { IMigrationSpec } from './util/migration-spec.js';
+import { IMigrationSpec, IApplyWithLLMConfig } from './util/migration-spec.js';
 
 export interface IShepherdInfo {
   workingDirectory: string;
@@ -13,6 +13,7 @@ export interface IMigrationInfo {
   repos: IRepo[] | null;
   upstreamOwner: string;
   selectedRepos?: IRepo[];
+  applywithllmConfig?: IApplyWithLLMConfig;
 }
 
 export interface IMigrationContext {
