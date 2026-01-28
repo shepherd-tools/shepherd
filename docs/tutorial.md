@@ -268,3 +268,35 @@ shepherd commit ~/shepherd-migration
 shepherd push ~/shepherd-migration
 shepherd pr ~/shepherd-migration
 ```
+
+## Alternative: AI-Powered Migrations
+
+For complex migrations that are difficult to express as shell scripts, Shepherd also supports AI-powered migrations. Instead of writing `apply` hooks, you describe the changes you want in natural language:
+
+```yaml
+# shepherd.yml
+id: 2024.01.15-eslint-config-upgrade
+title: Upgrade ESLint configuration
+adapter:
+  type: github
+  search_query: repo:YOURUSERNAME/shepherd-demo path:/ filename:.eslintrc
+provider: claude
+```
+
+Then apply the migration with a natural language prompt:
+
+```sh
+shepherd checkout ~/shepherd-migration
+shepherd ai ~/shepherd-migration "rename .eslintrc to .eslintrc.yml and ensure the file format is valid YAML"
+shepherd commit ~/shepherd-migration
+shepherd push ~/shepherd-migration
+shepherd pr ~/shepherd-migration
+```
+
+AI migrations are particularly useful for:
+
+- Complex refactoring (e.g., "convert all callback functions to async/await")
+- Dependency upgrades with breaking changes (e.g., "upgrade React from v17 to v18")
+- Code modernization (e.g., "add TypeScript types to all functions")
+
+Learn more in the [AI Migrations documentation](./ai-migrations.md).
