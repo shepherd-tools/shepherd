@@ -190,6 +190,99 @@ In each case, the API functionality and how you interact with it are largely the
 
 As a result, the value of `SHEPHERD_GITHUB_ENTERPRISE_URL` is a function of the type of GitHub service and used to support git APIs except cloning which is configurable via `SHEPHERD_GITHUB_ENTERPRISE_BASE_URL`. For `SHEPHERD_GITHUB_ENTERPRISE_BASE_URL`, while `github.com` works across GitHub service types, for backwards compatibility, we default to `api.github.com`.
 
+## AI-Powered Migrations
+
+Shepherd supports AI-powered migrations that use natural language prompts instead of shell scripts. This allows you to describe what changes you want to make in plain English, and let an AI model generate and apply the necessary code changes.
+
+### Quick Start
+
+```bash
+# 1. Create a shepherd.yml with your adapter config
+cat > my-migration/shepherd.yml << EOF
+id: node-24-upgrade
+title: Upgrade to Node 24
+adapter:
+  type: github
+  org: my-org
+provider: claude
+EOF
+
+# 2. Checkout repositories
+shepherd checkout ./my-migration
+
+# 3. Apply AI migration with a natural language prompt
+shepherd ai ./my-migration "upgrade to Node 24 and update package.json engines field"
+
+# 4. Review, commit, push, and create PRs
+shepherd commit ./my-migration
+shepherd push ./my-migration
+shepherd pr ./my-migration
+```
+
+### AI Command
+
+```bash
+shepherd ai <migration> <prompt> [options]
+```
+
+**Options:**
+
+- `--provider <provider>`: AI provider (`claude`, `openai`, or `ollama`). Required if not in shepherd.yml.
+- `--model <model>`: AI model to use (optional, provider uses its default).
+- `--max-tokens <number>`: Maximum tokens for AI response.
+- `--base-url <url>`: Custom API base URL (for local models).
+- `--repos <repos>`: Comma-separated list of repos to operate on.
+
+### AI Configuration in shepherd.yml
+
+```yaml
+id: my-ai-migration
+title: My AI Migration
+adapter:
+  type: github
+  org: my-org
+
+# AI-specific configuration
+provider: claude # Required: 'claude', 'openai', or 'ollama'
+model: claude-sonnet-4-20250514 # Optional: specific model
+baseUrl: http://localhost:8080/v1 # Optional: for local models
+context: # Optional: file filtering
+  include:
+    - '**/*.js'
+    - '**/*.ts'
+    - 'package.json'
+  exclude:
+    - 'node_modules/**'
+    - 'dist/**'
+max_tokens: 4096 # Optional: max tokens for AI response
+```
+
+### Environment Variables
+
+| Variable            | Provider | Description                           |
+| ------------------- | -------- | ------------------------------------- |
+| `ANTHROPIC_API_KEY` | Claude   | API key for Anthropic's Claude        |
+| `OPENAI_API_KEY`    | OpenAI   | API key for OpenAI                    |
+| `OLLAMA_HOST`       | Ollama   | Ollama server URL (default: localhost)|
+
+### Example Prompts
+
+```bash
+# Upgrade dependencies
+shepherd ai ./migration "upgrade lodash to v4 and fix any breaking changes"
+
+# Add TypeScript types
+shepherd ai ./migration "add TypeScript type annotations to all functions"
+
+# Fix security issues
+shepherd ai ./migration "update axios to latest version and fix any deprecated API usage"
+
+# Code modernization
+shepherd ai ./migration "replace var with const/let and convert callback functions to async/await"
+```
+
+For more details, see the [AI Migrations documentation](docs/ai-migrations.md).
+
 ### Usage
 
 Shepherd is run as follows:
