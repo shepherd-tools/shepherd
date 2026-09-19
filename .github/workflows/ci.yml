@@ -8,16 +8,16 @@ jobs:
         node: ['20', '22', '24']
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
       - name: Get Npm cache directory path
         id: npm-cache-dir-path
-        run: echo "::set-output name=dir::$(npm config get cache)"
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
       - name: Npm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ${{ steps.npm-cache-dir-path.outputs.dir }}
           key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
